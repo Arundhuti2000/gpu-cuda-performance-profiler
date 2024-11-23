@@ -1,21 +1,64 @@
-﻿
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-
+﻿#include <cuda_runtime.h>
 #include <stdio.h>
+#include <device_launch_parameters.h>
 
+__global__ void l1CacheTest(float* input, float* output, int size, int stride) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    float sum = 0.0f;
 
-__global__ void helloKernel() {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    printf("Hello from GPU thread %d!\n", idx);
+    // Strided memory access pattern
+    for (int i = tid; i < size; i += stride) {
+        sum += input[i];
+    }
+
+    output[tid] = sum;
 }
 
-
 int main() {
-    // Launch kernel with 1 block of 5 threads
-    printf("Hello from CPU!\n");
-    helloKernel <<<1, 5 >>> ();
-    // Wait for GPU to finish before printing from host
-    cudaDeviceSynchronize();
+    const int SIZE = 1024 * 1024;  // 1M elements
+    const int THREADS = 256;
+    const int BLOCKS = SIZE / THREADS;
+
+    float* h_input = new float[SIZE];
+    float* d_input, * d_output;
+
+    // Initialize data
+    for (int i = 0; i < SIZE; i++) {
+        h_input[i] = 1.0f;
+    }
+
+    // Allocate device memory
+    cudaMalloc(&d_input, SIZE * sizeof(float));
+    cudaMalloc(&d_output, BLOCKS * THREADS * sizeof(float));
+
+    // Copy to device
+    cudaMemcpy(d_input, h_input, SIZE * sizeof(float), cudaMemcpyHostToDevice);
+
+    // Test different strides
+    int strides[] = { 1, 2, 4, 8, 16, 32 };
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    printf("Stride\tTime (ms)\n");
+    for (int stride : strides) {
+        float ms = 0;
+
+        cudaEventRecord(start);
+        l1CacheTest <<<BLOCKS, THREADS >>> (d_input, d_output, SIZE, stride);
+        cudaEventRecord(stop);
+
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&ms, start, stop);
+
+        printf("%d\t%.3f\n", stride, ms);
+    }
+
+    // Cleanup
+    cudaFree(d_input);
+    cudaFree(d_output);
+    delete[] h_input;
+
     return 0;
 }
