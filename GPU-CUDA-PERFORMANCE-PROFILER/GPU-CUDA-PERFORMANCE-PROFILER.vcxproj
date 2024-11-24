@@ -78,9 +78,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="Cube.cu" />
-    <CudaCompile Include="File.cu" />
-    <CudaCompile Include="hello2.cu" />
-    <CudaCompile Include="HelloWorld.cu" />
+    <CudaCompile Include="gpu_cache_benchmark.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
