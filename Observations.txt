@@ -1,0 +1,100 @@
+while running the gpu cuda code:
+#include <cuda_runtime.h>
+#include <stdio.h>
+#include <device_launch_parameters.h>
+global void l1CacheTest(float* input, float* output, int size, int stride) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    float sum = 0.0f;
+    // Strided memory access pattern
+    for (int i = tid; i < size; i += stride) {
+        sum += input[i];
+    }
+    output[tid] = sum;
+}
+int main() {
+    const int SIZE = 1024 * 1024;  // 1M elements
+    const int THREADS = 256;
+    const int BLOCKS = SIZE / THREADS;
+    float* h_input = new float[SIZE];
+    float* d_input, * d_output;
+    // Initialize data
+    for (int i = 0; i < SIZE; i++) {
+        h_input[i] = 1.0f;
+    }
+    // Allocate device memory
+    cudaMalloc(&d_input, SIZE * sizeof(float));
+    cudaMalloc(&d_output, BLOCKS * THREADS * sizeof(float));
+    // Copy to device
+    cudaMemcpy(d_input, h_input, SIZE * sizeof(float), cudaMemcpyHostToDevice);
+    // Test different strides
+    int strides[] = { 1, 2, 4, 8, 16, 32 };
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    printf("Stride\tTime (ms)\n");
+    for (int stride : strides) {
+        float ms = 0;
+        cudaEventRecord(start);
+        l1CacheTest <<<BLOCKS, THREADS >>> (d_input, d_output, SIZE, stride);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&ms, start, stop);
+        printf("%d\t%.3f\n", stride, ms);
+    }
+    // Cleanup
+    cudaFree(d_input);
+    cudaFree(d_output);
+    delete[] h_input;
+    return 0;
+}
+
+In the performance under task manager my 4060 is using 100% gpu under 3D continuously, while 3060 is utilising under copy that too not that much only a single spike why
+
+
+Based on the provided code and GPU specifications from the documents, the different utilization patterns you're seeing between the RTX 4060 and RTX 3060:
+
+The difference in utilization comes down to architectural differences between Ada Lovelace (4060) and Ampere (3060), particularly in how they handle L1 cache and memory operations:
+
+RTX 4060 (Ada Lovelace):
+Larger L2 cache (24MB vs 3MB on 3060)
+More advanced memory controller
+Shows up as "3D" because it's processing the computation mostly on-chip
+High utilization because it's keeping the compute units busy
+RTX 3060 (Ampere):
+Smaller L2 cache (3MB)
+Shows spikes in "Copy" because it needs to access main memory more frequently
+Lower sustained utilization due to memory bottlenecks
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+Instruction Execution Patterns:
+RTX 3060: Shows lower stall percentages (~0.83% per instruction)
+RTX 4060: Higher stall percentages (~2.94% per instruction)
+This indicates the 4060 spends more time waiting, likely due to its different cache architecture.
+
+Cache Impact:
+
+3060's smaller cache but wider memory bus shows better instruction throughput
+4060's larger cache (24MB vs 3MB) appears to introduce more latency in instruction fetching
+
+
+Instruction Scheduling:
+
+3060 shows more efficient instruction scheduling with Ampere architecture
+4060's Ada architecture prioritizes throughput over latency
+
+This suggests:
+
+Different cache hierarchy impacts on instruction fetching
+Trade-off between the 4060's higher theoretical performance vs actual instruction execution efficiency
+Memory subsystem architectural differences significantly affect instruction-level parallelism
+
+This SASS analysis helps explain why the 3060 shows more consistent performance despite lower peak capabilities, while the 4060 shows higher peak performance but with more variable execution patterns.
+
+
+Cache Architecture Trade-offs:
+The 4060's much larger L2 cache (24MB vs 3MB) creates a "cache-first" approach
+While beneficial for repeated memory access, this introduces extra latency for initial cache population
+Other testers have noted this behavior particularly in memory-intensive workloads where the data doesn't fit well in cache patterns
