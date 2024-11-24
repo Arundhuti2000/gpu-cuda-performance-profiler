@@ -77,7 +77,8 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="HelloWorld.cu" />
+    <CudaCompile Include="L1CacheTest.cu" />
+    <CudaCompile Include="L2CacheTest.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
